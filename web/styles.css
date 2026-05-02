@@ -1,0 +1,403 @@
+:root {
+  color-scheme: dark;
+  
+  /* A deep, dark background with subtle light orbs to mimic the 3D environment in your image */
+  --bg: 
+    radial-gradient(circle at 85% 15%, rgba(200, 200, 200, 0.12) 0%, transparent 25%),
+    radial-gradient(circle at 15% 85%, rgba(200, 200, 200, 0.08) 0%, transparent 30%),
+    linear-gradient(135deg, #1e1e24 0%, #08080a 100%);
+  
+  /* Dark Glassmorphism Variables */
+  --glass-panel: rgba(30, 30, 35, 0.35);
+  --glass-panel-strong: rgba(20, 20, 25, 0.55);
+  --glass-border: rgba(255, 255, 255, 0.12); /* Sharp, thin white edge for the glass */
+  --glass-border-light: rgba(255, 255, 255, 0.05);
+  --glass-shadow: 0 16px 40px 0 rgba(0, 0, 0, 0.5); /* Deeper shadows for dark mode */
+  --glass-blur: blur(20px); /* Heavier blur for the premium frosted look */
+  
+  /* Updated colors for dark mode contrast */
+  --text: #f0f0f5;
+  --muted: #8b9298;
+  --line: rgba(255, 255, 255, 0.1);
+  --teal: #4fd1c5; /* Brighter accent to pop on dark background */
+  --teal-dark: #38b2ac;
+  --coral: #fc8181;
+  --amber: #fbd38d;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  min-height: 100vh;
+  margin: 0;
+  background: var(--bg);
+  background-attachment: fixed; /* Keeps background still while scrolling */
+  color: var(--text);
+  font-family: Inter, "Segoe UI", Arial, sans-serif;
+  letter-spacing: 0;
+}
+
+button,
+textarea {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: 280px minmax(0, 1fr);
+  min-height: 100vh;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  border-right: 1px solid var(--glass-border);
+  background: var(--glass-panel-strong);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  padding: 24px;
+  box-shadow: 1px 0 30px rgba(0, 0, 0, 0.3);
+  z-index: 10;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  border: 1px solid rgba(79, 209, 197, 0.3);
+  border-radius: 12px;
+  background: var(--glass-panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.2), inset 0 0 10px rgba(79, 209, 197, 0.1);
+}
+
+.brand-mark svg {
+  width: 32px;
+  height: 32px;
+  fill: none;
+  stroke: var(--teal);
+  stroke-width: 2.1;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+h1 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+}
+
+.brand p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.status-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 36px;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--glass-panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  padding: 8px 10px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.status-dot {
+  width: 10px;
+  height: 10px;
+  flex: 0 0 10px;
+  border-radius: 999px;
+  background: var(--amber);
+  box-shadow: 0 0 8px var(--amber); /* Glowing status dots */
+}
+
+.status-dot.ready {
+  background: var(--teal);
+  box-shadow: 0 0 8px var(--teal);
+}
+
+.status-dot.missing {
+  background: var(--coral);
+  box-shadow: 0 0 8px var(--coral);
+}
+
+.icon-button,
+.send-button {
+  display: inline-grid;
+  width: 44px;
+  height: 44px;
+  place-items: center;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--glass-panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  color: var(--text);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.icon-button:hover,
+.send-button:hover {
+  border-color: var(--teal);
+  background: rgba(40, 40, 45, 0.6);
+}
+
+.icon-button:focus-visible,
+.send-button:focus-visible,
+textarea:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+}
+
+.icon-button svg,
+.send-button svg {
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.icon-button.wide {
+  width: 100%;
+  margin-top: auto;
+}
+
+.chat-panel {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
+  min-height: 100vh;
+  background: transparent; 
+}
+
+.messages {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  overflow-y: auto;
+  padding: 28px clamp(18px, 5vw, 64px);
+}
+
+.message {
+  display: grid;
+  max-width: 780px;
+  gap: 6px;
+}
+
+.message.user {
+  align-self: flex-end;
+}
+
+.message.assistant,
+.message.system {
+  align-self: flex-start;
+}
+
+.message-label {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bubble {
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass-panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+  padding: 12px 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.user .bubble {
+  border-color: rgba(79, 209, 197, 0.3);
+  /* A subtly teal-tinted dark glass */
+  background: rgba(79, 209, 197, 0.08); 
+}
+
+.system .bubble {
+  border-color: rgba(252, 129, 129, 0.2);
+  /* A subtly coral-tinted dark glass */
+  background: rgba(252, 129, 129, 0.08); 
+}
+
+.image-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.image-card {
+  display: grid;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--glass-panel);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  color: var(--text);
+  text-decoration: none;
+  box-shadow: var(--glass-shadow);
+  transition: all 0.2s ease;
+}
+
+.image-card:hover {
+  border-color: var(--teal);
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.6);
+}
+
+.image-card img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.image-meta {
+  min-height: 38px;
+  padding: 8px 9px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
+}
+
+.composer {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 48px;
+  gap: 10px;
+  border-top: 1px solid var(--glass-border-light);
+  background: rgba(15, 15, 18, 0.6);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  padding: 16px clamp(18px, 5vw, 64px);
+  box-shadow: 0 -8px 40px rgba(0, 0, 0, 0.4);
+}
+
+textarea {
+  width: 100%;
+  max-height: 170px;
+  min-height: 48px;
+  resize: none;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.2);
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+textarea::placeholder {
+  color: var(--muted);
+}
+
+textarea:focus {
+  background: rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+
+.send-button {
+  width: 48px;
+  height: 48px;
+  border: 1px solid rgba(79, 209, 197, 0.4);
+  background: rgba(79, 209, 197, 0.15); /* Glassy teal button */
+  color: var(--teal);
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+.send-button:hover {
+  background: var(--teal);
+  color: #121212;
+  border-color: var(--teal);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(79, 209, 197, 0.3);
+}
+
+.send-button:disabled,
+textarea:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  transform: none;
+}
+
+@media (max-width: 760px) {
+  .app-shell {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto minmax(0, 1fr);
+  }
+
+  .sidebar {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+    gap: 12px;
+    border-right: 0;
+    border-bottom: 1px solid var(--glass-border);
+    padding: 14px;
+  }
+
+  .status-row {
+    grid-column: 1 / -1;
+  }
+
+  .icon-button.wide {
+    width: 44px;
+    margin-top: 0;
+  }
+
+  .chat-panel {
+    min-height: calc(100vh - 137px);
+  }
+
+  .messages {
+    padding: 18px 14px;
+  }
+
+  .image-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .composer {
+    padding: 12px 14px;
+  }
+}
+
+@media (max-width: 440px) {
+  .image-grid {
+    grid-template-columns: 1fr;
+  }
+}
