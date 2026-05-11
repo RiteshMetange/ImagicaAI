@@ -5,3 +5,4 @@ __pycache__/
 myaibot/
 server.out.log
 server.err.log
+node-server.*.log
