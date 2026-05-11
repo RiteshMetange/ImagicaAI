@@ -38,9 +38,17 @@ body {
   font-family: Inter, "Segoe UI", Arial, sans-serif;
   letter-spacing: 0;
 }
+.hide-scrollbar {
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;  /* IE 10+ */
+}
 
+.hide-scrollbar::-webkit-scrollbar {
+  display: none; /* WebKit */
+}
 button,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
@@ -138,6 +146,63 @@ h1 {
 .status-dot.missing {
   background: var(--coral);
   box-shadow: 0 0 8px var(--coral);
+}
+
+.provider-control {
+  display: grid;
+  gap: 8px;
+  padding: 12px; /* Increased slightly for better breathing room */
+
+  background: var(--glass-panel);
+  border: 1px solid var(--glass-border);
+  border-radius: 12px; /* Increased outer radius for better nesting */
+  
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+
+  color: var(--muted);
+}
+
+/* Scope the uppercase styling strictly to the label/title element 
+   (Assuming you use a <label> or a specific span for the title) */
+.provider-control > label,
+.provider-control > .title {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em; /* Critical for readable uppercase text */
+}
+
+.provider-control select {
+  width: 100%;
+  min-height: 40px;
+  padding: 8px 12px;
+
+  /* Replaced hardcoded rgba with a variable fallback for consistency */
+  background: var(--glass-input-bg, rgba(0, 0, 0, 0.35)); 
+  color: var(--text);
+  border: 1px solid var(--glass-border);
+  border-radius: 6px; /* Adjusted inner radius for visual harmony */
+  
+  font-family: inherit; /* Ensures it matches the rest of your app */
+  font-size: 14px;
+  cursor: pointer;
+  transition: outline 0.2s ease, border-color 0.2s ease;
+}
+
+.provider-control select:focus-visible {
+  outline: 2px solid var(--teal);
+  outline-offset: 2px;
+  border-color: var(--teal); /* Extra visual feedback */
+}
+
+.provider-control small {
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 400; /* Softened from 600 to establish visual hierarchy */
+  opacity: 0.8;
+  line-height: 1.4;
 }
 
 .icon-button,
@@ -371,6 +436,10 @@ textarea:disabled {
   }
 
   .status-row {
+    grid-column: 1 / -1;
+  }
+
+  .provider-control {
     grid-column: 1 / -1;
   }
 

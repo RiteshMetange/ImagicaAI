@@ -8,9 +8,13 @@ from urllib.parse import unquote
 from cf import (
     ChatbotConfigError,
     PexelsAPIError,
+    get_default_llm_provider,
     get_bot_mode,
+    get_chat_provider,
     get_bot_response,
+    get_llm_provider_statuses,
     get_model,
+    has_gemini_api_key,
     has_openai_api_key,
     has_pexels_api_key,
     is_chat_ready,
@@ -28,12 +32,17 @@ class ChatHandler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         if self.path == "/api/status":
+            default_provider = get_default_llm_provider()
             self.send_json(
                 {
                     "configured": is_chat_ready(),
                     "mode": get_bot_mode(),
-                    "model": get_model(),
+                    "model": get_model(default_provider),
+                    "provider": get_chat_provider(default_provider),
+                    "defaultProvider": default_provider,
+                    "llmProviders": get_llm_provider_statuses(),
                     "openaiConfigured": has_openai_api_key(),
+                    "geminiConfigured": has_gemini_api_key(),
                     "pexelsConfigured": has_pexels_api_key(),
                 }
             )
@@ -60,7 +69,8 @@ class ChatHandler(BaseHTTPRequestHandler):
             payload = self.read_json()
             message = str(payload.get("message", "")).strip()
             history = payload.get("history", [])
-            response = get_bot_response(message, history=history)
+            provider = str(payload.get("provider", "")).strip()
+            response = get_bot_response(message, history=history, provider=provider)
         except ValueError as exc:
             self.send_json({"error": str(exc)}, status=400)
         except ChatbotConfigError as exc:

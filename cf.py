@@ -8,9 +8,16 @@ from pathlib import Path
 BOT_MODEL = "imagica-hybrid"
 PEXELS_API_URL = "https://api.pexels.com/v1/search"
 OPENAI_CHAT_API_URL = "https://api.openai.com/v1/chat/completions"
+GROQ_CHAT_API_URL = "https://api.groq.com/openai/v1/chat/completions"
+GEMINI_GENERATE_API_URL = "https://generativelanguage.googleapis.com/v1beta/{model}:generateContent"
 DEFAULT_OPENAI_CHAT_MODEL = "gpt-4o-mini"
+DEFAULT_GROQ_CHAT_MODEL = "llama-3.1-8b-instant"
+DEFAULT_GEMINI_CHAT_MODEL = "gemini-2.5-flash"
 DEFAULT_IMAGE_COUNT = 6
 ROOT = Path(__file__).parent
+LLM_PROVIDER_OPENAI = "openai"
+LLM_PROVIDER_GEMINI = "gemini"
+DEFAULT_LLM_PROVIDER = LLM_PROVIDER_OPENAI
 
 QUESTION_STARTERS = {
     "what",
@@ -177,7 +184,10 @@ CHAT_SYSTEM_PROMPT = (
 )
 
 PLACEHOLDER_SECRETS = {
+    "your_gemini_api_key_here",
+    "your_google_api_key_here",
     "your_openai_api_key_here",
+    "your_openai_or_groq_api_key_here",
     "your_pexels_api_key_here",
 }
 
@@ -190,7 +200,7 @@ class PexelsAPIError(RuntimeError):
     pass
 
 
-class OpenAIAPIError(RuntimeError):
+class LLMProviderError(RuntimeError):
     pass
 
 
@@ -231,25 +241,137 @@ def has_pexels_api_key():
     return is_configured_secret(os.getenv("PEXELS_API_KEY", ""))
 
 
+def first_configured_env(*names):
+    for name in names:
+        value = os.getenv(name, "").strip()
+        if is_configured_secret(value):
+            return value
+    return ""
+
+
 def get_openai_api_key():
-    api_key = os.getenv("OPENAI_API_KEY", "").strip()
-    if not is_configured_secret(api_key):
-        return ""
-    return api_key
+    return first_configured_env("OPENAI_API_KEY", "GROQ_API_KEY")
 
 
 def has_openai_api_key():
     return bool(get_openai_api_key())
 
 
-def get_chat_model():
-    return os.getenv("OPENAI_CHAT_MODEL", DEFAULT_OPENAI_CHAT_MODEL).strip() or DEFAULT_OPENAI_CHAT_MODEL
+def get_gemini_api_key():
+    return first_configured_env(
+        "GEMINI_API_KEY",
+        "GOOGLE_API_KEY",
+        "GOOGLE_AI_API_KEY",
+        "GEMENI_API_KEY",
+        "GEMENI_CHAT_MODEL",
+    )
+
+
+def has_gemini_api_key():
+    return bool(get_gemini_api_key())
+
+
+def is_groq_api_key(api_key):
+    return api_key.startswith("gsk_")
+
+
+def normalize_llm_provider(provider=None):
+    provider_id = str(provider or "").strip().lower()
+    if provider_id in {LLM_PROVIDER_OPENAI, LLM_PROVIDER_GEMINI}:
+        return provider_id
+    return DEFAULT_LLM_PROVIDER
+
+
+def get_default_llm_provider():
+    configured_provider = normalize_llm_provider(os.getenv("LLM_PROVIDER", DEFAULT_LLM_PROVIDER))
+    if has_llm_provider_key(configured_provider):
+        return configured_provider
+    for provider_id in (LLM_PROVIDER_OPENAI, LLM_PROVIDER_GEMINI):
+        if has_llm_provider_key(provider_id):
+            return provider_id
+    return configured_provider
+
+
+def get_chat_provider(provider=None):
+    return normalize_llm_provider(provider or get_default_llm_provider())
+
+
+def get_openai_chat_api_url():
+    configured_url = os.getenv("OPENAI_CHAT_API_URL", "").strip()
+    if configured_url:
+        return configured_url
+
+    if is_groq_api_key(get_openai_api_key()):
+        return GROQ_CHAT_API_URL
+
+    return OPENAI_CHAT_API_URL
+
+
+def get_openai_chat_model():
+    configured_model = os.getenv("OPENAI_CHAT_MODEL", "").strip()
+    if configured_model:
+        return configured_model
+
+    if is_groq_api_key(get_openai_api_key()):
+        return DEFAULT_GROQ_CHAT_MODEL
+
+    return DEFAULT_OPENAI_CHAT_MODEL
+
+
+def get_gemini_chat_model():
+    configured_model = (
+        os.getenv("GEMINI_CHAT_MODEL", "").strip()
+        or os.getenv("GOOGLE_CHAT_MODEL", "").strip()
+    )
+    return configured_model or DEFAULT_GEMINI_CHAT_MODEL
+
+
+def get_chat_model(provider=None):
+    provider_id = get_chat_provider(provider)
+    if provider_id == LLM_PROVIDER_GEMINI:
+        return get_gemini_chat_model()
+    return get_openai_chat_model()
+
+
+def has_llm_provider_key(provider):
+    provider_id = normalize_llm_provider(provider)
+    if provider_id == LLM_PROVIDER_GEMINI:
+        return has_gemini_api_key()
+    return has_openai_api_key()
+
+
+def get_llm_provider_label(provider):
+    provider_id = normalize_llm_provider(provider)
+    if provider_id == LLM_PROVIDER_GEMINI:
+        return "Gemini"
+    return "OpenAI"
+
+
+def get_llm_provider_statuses():
+    return [
+        {
+            "id": LLM_PROVIDER_OPENAI,
+            "label": "OpenAI",
+            "configured": has_openai_api_key(),
+            "model": get_openai_chat_model(),
+        },
+        {
+            "id": LLM_PROVIDER_GEMINI,
+            "label": "Gemini",
+            "configured": has_gemini_api_key(),
+            "model": get_gemini_chat_model(),
+        },
+    ]
+
+
+def has_any_llm_provider():
+    return any(provider["configured"] for provider in get_llm_provider_statuses())
 
 
 def get_bot_mode():
-    if has_openai_api_key() and has_pexels_api_key():
+    if has_any_llm_provider() and has_pexels_api_key():
         return "chat-and-pexels"
-    if has_openai_api_key():
+    if has_any_llm_provider():
         return "chat"
     if has_pexels_api_key():
         return "basic-chat-and-pexels"
@@ -260,9 +382,10 @@ def is_chat_ready():
     return True
 
 
-def get_model():
-    if has_openai_api_key():
-        return get_chat_model()
+def get_model(provider=None):
+    provider_id = get_chat_provider(provider)
+    if has_llm_provider_key(provider_id):
+        return get_chat_model(provider_id)
     return BOT_MODEL
 
 
@@ -381,7 +504,7 @@ def parse_api_error(raw_body):
     return str(api_error or "Unknown API error.")
 
 
-def coerce_openai_content(content):
+def coerce_text_content(content):
     if isinstance(content, str):
         return content.strip()
 
@@ -399,49 +522,191 @@ def coerce_openai_content(content):
     return ""
 
 
-def get_openai_reply(user_input, history=None):
+def build_gemini_contents(user_input, history=None):
+    contents = []
+
+    for item in (history or [])[-12:]:
+        if not isinstance(item, dict):
+            continue
+
+        role = item.get("role")
+        content = str(item.get("content", "")).strip()
+        if not content:
+            continue
+
+        if role == "user":
+            gemini_role = "user"
+        elif role == "assistant":
+            gemini_role = "model"
+        else:
+            continue
+
+        contents.append({"role": gemini_role, "parts": [{"text": content[:1600]}]})
+
+    contents.append({"role": "user", "parts": [{"text": user_input}]})
+    return contents
+
+
+def parse_llm_response_body(response):
+    return json.loads(response.read().decode("utf-8"))
+
+
+def call_openai_chat(user_input, history=None):
     api_key = get_openai_api_key()
     if not api_key:
-        return None
+        raise LLMProviderError("OpenAI API key is missing.")
 
     payload = {
-        "model": get_chat_model(),
+        "model": get_openai_chat_model(),
         "messages": build_openai_messages(user_input, history=history),
         "temperature": 0.7,
         "max_tokens": 500,
     }
-    api_request = request.Request(
-        OPENAI_CHAT_API_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers={
-            "Authorization": f"Bearer {api_key}",
-            "Content-Type": "application/json",
-            "User-Agent": "Imagica/1.0",
-        },
-        method="POST",
-    )
 
     try:
+        api_request = request.Request(
+            get_openai_chat_api_url(),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json",
+                "User-Agent": "Imagica/1.0",
+            },
+            method="POST",
+        )
         with request.urlopen(api_request, timeout=30) as response:
-            response_payload = json.loads(response.read().decode("utf-8"))
+            response_payload = parse_llm_response_body(response)
     except error.HTTPError as exc:
         raw_body = exc.read().decode("utf-8", errors="replace")
-        raise OpenAIAPIError(parse_api_error(raw_body)) from exc
+        raise LLMProviderError(parse_api_error(raw_body)) from exc
     except error.URLError as exc:
-        raise OpenAIAPIError(f"Could not reach the chat service: {exc.reason}") from exc
+        raise LLMProviderError(f"Could not reach OpenAI: {exc.reason}") from exc
+    except ValueError as exc:
+        raise LLMProviderError("The OpenAI chat API URL is invalid. Check OPENAI_CHAT_API_URL in .env.") from exc
     except json.JSONDecodeError as exc:
-        raise OpenAIAPIError("The chat service returned an unreadable response.") from exc
+        raise LLMProviderError("OpenAI returned an unreadable response.") from exc
 
     choices = response_payload.get("choices", [])
     if not choices:
-        raise OpenAIAPIError("The chat service did not return a message.")
+        raise LLMProviderError("OpenAI did not return a message.")
 
     message = choices[0].get("message", {})
-    content = coerce_openai_content(message.get("content", ""))
+    content = coerce_text_content(message.get("content", ""))
     if not content:
-        raise OpenAIAPIError("The chat service returned an empty message.")
+        raise LLMProviderError("OpenAI returned an empty message.")
 
     return content
+
+
+def get_gemini_model_path():
+    model = get_gemini_chat_model().strip().strip("/")
+    if model.startswith(("models/", "tunedModels/")):
+        return model
+    return f"models/{model}"
+
+
+def call_gemini_chat(user_input, history=None):
+    api_key = get_gemini_api_key()
+    if not api_key:
+        raise LLMProviderError("Gemini API key is missing.")
+
+    model_path = parse.quote(get_gemini_model_path(), safe="/")
+    payload = {
+        "systemInstruction": {"parts": [{"text": CHAT_SYSTEM_PROMPT}]},
+        "contents": build_gemini_contents(user_input, history=history),
+        "generationConfig": {
+            "temperature": 0.7,
+            "maxOutputTokens": 500,
+        },
+    }
+
+    try:
+        api_request = request.Request(
+            GEMINI_GENERATE_API_URL.format(model=model_path),
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "x-goog-api-key": api_key,
+                "Content-Type": "application/json",
+                "User-Agent": "Imagica/1.0",
+            },
+            method="POST",
+        )
+        with request.urlopen(api_request, timeout=30) as response:
+            response_payload = parse_llm_response_body(response)
+    except error.HTTPError as exc:
+        raw_body = exc.read().decode("utf-8", errors="replace")
+        raise LLMProviderError(parse_api_error(raw_body)) from exc
+    except error.URLError as exc:
+        raise LLMProviderError(f"Could not reach Gemini: {exc.reason}") from exc
+    except ValueError as exc:
+        raise LLMProviderError("The Gemini API URL is invalid.") from exc
+    except json.JSONDecodeError as exc:
+        raise LLMProviderError("Gemini returned an unreadable response.") from exc
+
+    candidates = response_payload.get("candidates", [])
+    if not candidates:
+        raise LLMProviderError("Gemini did not return a message.")
+
+    first_candidate = candidates[0]
+    parts = first_candidate.get("content", {}).get("parts", [])
+    content = coerce_text_content(parts)
+    if not content:
+        finish_reason = first_candidate.get("finishReason")
+        detail = f" Finish reason: {finish_reason}." if finish_reason else ""
+        raise LLMProviderError(f"Gemini returned an empty message.{detail}")
+
+    return content
+
+
+LLM_PROVIDER_HANDLERS = {
+    LLM_PROVIDER_OPENAI: call_openai_chat,
+    LLM_PROVIDER_GEMINI: call_gemini_chat,
+}
+
+
+def get_llm_provider_candidates(requested_provider):
+    requested_provider = normalize_llm_provider(requested_provider)
+    candidates = [requested_provider]
+    candidates.extend(
+        provider_id
+        for provider_id in (LLM_PROVIDER_OPENAI, LLM_PROVIDER_GEMINI)
+        if provider_id != requested_provider
+    )
+    return candidates
+
+
+def get_llm_reply(user_input, history=None, provider=None):
+    requested_provider = normalize_llm_provider(provider or get_default_llm_provider())
+    errors = []
+
+    for provider_id in get_llm_provider_candidates(requested_provider):
+        provider_label = get_llm_provider_label(provider_id)
+        if not has_llm_provider_key(provider_id):
+            errors.append(f"{provider_label} API key is missing")
+            continue
+
+        try:
+            reply = LLM_PROVIDER_HANDLERS[provider_id](user_input, history=history)
+        except LLMProviderError as exc:
+            errors.append(f"{provider_label}: {exc}")
+            continue
+
+        return {
+            "reply": reply,
+            "provider": provider_id,
+            "providerLabel": provider_label,
+            "model": get_chat_model(provider_id),
+            "fallback": provider_id != requested_provider,
+            "errors": errors,
+        }
+
+    raise LLMProviderError("; ".join(errors) or "No LLM provider is configured.")
+
+
+def get_openai_reply(user_input, history=None):
+    if not get_openai_api_key():
+        return None
+    return call_openai_chat(user_input, history=history)
 
 
 def calculate_expression(text):
@@ -709,7 +974,7 @@ def get_local_fallback_reply(user_input):
     if lowered.endswith("?"):
         return (
             "I can help with simpler questions locally. For this one, try asking in a more specific way, "
-            "or add OPENAI_API_KEY to .env to enable fuller general chat replies."
+            "or add OPENAI_API_KEY or GEMINI_API_KEY to .env to enable fuller general chat replies."
         )
 
     if any(word in lowered for word in ["problem", "issue", "stuck", "not working", "error"]):
@@ -725,33 +990,68 @@ def get_local_fallback_reply(user_input):
         "I can handle basic chat locally. Try greetings, simple math like '24 * 7', "
         "unit conversions like '10 km to miles', quick plans, date/time questions, "
         "or image requests like 'photos of mountains'. For broader open-ended answers, "
-        "add OPENAI_API_KEY to .env."
+        "add OPENAI_API_KEY or GEMINI_API_KEY to .env."
     )
 
 
-def get_general_chat_reply(user_input, history=None):
+def get_general_chat_response(user_input, history=None, provider=None):
+    requested_provider = get_chat_provider(provider)
     try:
-        openai_reply = get_openai_reply(user_input, history=history)
-    except OpenAIAPIError as exc:
-        return (
-            f"I could not reach the full chat service: {exc}\n\n"
-            f"{get_local_fallback_reply(user_input)}"
+        llm_result = get_llm_reply(user_input, history=history, provider=requested_provider)
+    except LLMProviderError as exc:
+        requested_label = get_llm_provider_label(requested_provider)
+        return {
+            "reply": (
+                f"I could not use {requested_label}: {exc}\n\n"
+                f"{get_local_fallback_reply(user_input)}"
+            ),
+            "images": [],
+            "model": BOT_MODEL,
+            "provider": requested_provider,
+            "providerLabel": requested_label,
+            "fallback": True,
+            "llmError": str(exc),
+        }
+
+    if llm_result["fallback"]:
+        requested_label = get_llm_provider_label(requested_provider)
+        llm_result["reply"] = (
+            f"{requested_label} was unavailable, so I used {llm_result['providerLabel']} instead.\n\n"
+            f"{llm_result['reply']}"
         )
 
-    if openai_reply:
-        return openai_reply
+    return {
+        "reply": llm_result["reply"],
+        "images": [],
+        "model": llm_result["model"],
+        "provider": llm_result["provider"],
+        "providerLabel": llm_result["providerLabel"],
+        "fallback": llm_result["fallback"],
+    }
 
-    return get_local_fallback_reply(user_input)
+
+def get_general_chat_reply(user_input, history=None, provider=None):
+    return get_general_chat_response(user_input, history=history, provider=provider)["reply"]
 
 
-def get_bot_response(user_input, history=None):
+def get_bot_response(user_input, history=None, provider=None):
     user_input = user_input.strip()
     if not user_input:
         raise ValueError("Message is empty.")
 
+    provider_id = get_chat_provider(provider)
+    provider_label = get_llm_provider_label(provider_id)
+
     local_reply = get_local_reply(user_input, history=history)
     if local_reply:
-        return {"reply": local_reply, "images": [], "model": get_model()}
+        return {
+            "reply": local_reply,
+            "images": [],
+            "model": get_model(provider_id),
+            "provider": provider_id,
+            "providerLabel": provider_label,
+            "fallback": False,
+        }
 
     image_query = extract_image_query(user_input)
     if image_query:
@@ -759,7 +1059,10 @@ def get_bot_response(user_input, history=None):
             return {
                 "reply": "PEXELS_API_KEY is not set on the server. Add your Pexels key to .env first.",
                 "images": [],
-                "model": get_model(),
+                "model": get_model(provider_id),
+                "provider": provider_id,
+                "providerLabel": provider_label,
+                "fallback": False,
             }
 
         images = search_pexels_images(image_query)
@@ -767,25 +1070,26 @@ def get_bot_response(user_input, history=None):
             return {
                 "reply": f"I could not find Pexels images for \"{image_query}\".",
                 "images": [],
-                "model": get_model(),
+                "model": get_model(provider_id),
+                "provider": provider_id,
+                "providerLabel": provider_label,
+                "fallback": False,
             }
 
         return {
             "reply": f"Found {len(images)} Pexels image results for \"{image_query}\".",
             "images": images,
-            "model": get_model(),
+            "model": get_model(provider_id),
+            "provider": provider_id,
+            "providerLabel": provider_label,
+            "fallback": False,
         }
 
-    general_reply = get_general_chat_reply(user_input, history=history)
-    return {
-        "reply": general_reply,
-        "images": [],
-        "model": get_model(),
-    }
+    return get_general_chat_response(user_input, history=history, provider=provider_id)
 
 
 def get_ai_reply(user_input, history=None, model=None):
-    return get_bot_response(user_input, history=history)["reply"]
+    return get_bot_response(user_input, history=history, provider=model)["reply"]
 
 
 def chat_with_ai():

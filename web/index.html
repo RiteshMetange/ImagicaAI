@@ -27,6 +27,15 @@
           <span id="status-text">Checking</span>
         </div>
 
+        <label class="provider-control" for="provider-select">
+          <span>AI model</span>
+          <select id="provider-select" aria-label="AI model">
+            <option value="openai">OpenAI</option>
+            <option value="gemini">Gemini</option>
+          </select>
+          <small id="provider-hint">Checking</small>
+        </label>
+
         <button id="clear-chat" class="icon-button wide" type="button" title="Clear chat" aria-label="Clear chat">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M3 6h18"></path>

@@ -6,19 +6,35 @@ const clearButton = document.querySelector("#clear-chat");
 const statusDot = document.querySelector("#status-dot");
 const statusText = document.querySelector("#status-text");
 const modelName = document.querySelector("#model-name");
+const providerSelect = document.querySelector("#provider-select");
+const providerHint = document.querySelector("#provider-hint");
 
-const textarea = document.getElementById('message-input');
-
-textarea.addEventListener('input', function() {
-  this.style.height = 'auto'; // Reset height to recalculate
-  this.style.height = (this.scrollHeight) + 'px'; // Set to scroll height
-});
+const PROVIDER_STORAGE_KEY = "imagica.llmProvider";
 
 let history = [];
 let configured = false;
 let pexelsConfigured = false;
 let openaiConfigured = false;
+let geminiConfigured = false;
+let llmProviders = [];
+let selectedProvider = loadStoredProvider();
 let busy = false;
+
+function loadStoredProvider() {
+  try {
+    return localStorage.getItem(PROVIDER_STORAGE_KEY) || "openai";
+  } catch (error) {
+    return "openai";
+  }
+}
+
+function saveStoredProvider(providerId) {
+  try {
+    localStorage.setItem(PROVIDER_STORAGE_KEY, providerId);
+  } catch (error) {
+    // Preference persistence is helpful, but chat should still work without it.
+  }
+}
 
 function setStatus(state, text) {
   statusDot.className = `status-dot ${state}`;
@@ -35,33 +51,103 @@ function scrollToLatest() {
   messagesEl.scrollTop = messagesEl.scrollHeight;
 }
 
+function getProviderInfo(providerId = selectedProvider) {
+  const provider = llmProviders.find((item) => item.id === providerId);
+  if (provider) {
+    return provider;
+  }
+
+  const label = providerId === "gemini" ? "Gemini" : "OpenAI";
+  return {
+    id: providerId,
+    label,
+    configured: false,
+    model: "",
+  };
+}
+
+function hasAnyLlmProvider() {
+  return llmProviders.some((provider) => provider.configured);
+}
+
+function setProviderOptions(providers) {
+  providerSelect.textContent = "";
+
+  for (const provider of providers) {
+    const option = document.createElement("option");
+    option.value = provider.id;
+    option.textContent = provider.configured
+      ? provider.label
+      : `${provider.label} (missing key)`;
+    providerSelect.appendChild(option);
+  }
+
+  if (!providers.some((provider) => provider.id === selectedProvider)) {
+    selectedProvider = providers[0]?.id || "openai";
+  }
+
+  providerSelect.value = selectedProvider;
+}
+
+function updateProviderUi() {
+  const provider = getProviderInfo();
+  const model = provider.model || "local fallback";
+  modelName.textContent = `${provider.label} - ${model}`;
+  providerHint.textContent = provider.configured
+    ? `Using ${provider.label}`
+    : `${provider.label} key missing`;
+
+  if (!configured) {
+    setStatus("missing", "Server offline");
+    return;
+  }
+
+  setStatus("ready", readyStatusText());
+}
+
 function readyMessage() {
-  if (openaiConfigured && pexelsConfigured) {
-    return "Ready. Ask me anything, try simple math, or ask for photos of mountains.";
+  const provider = getProviderInfo();
+
+  if (provider.configured && pexelsConfigured) {
+    return `Ready. ${provider.label} handles AI replies, and Pexels handles image search.`;
+  }
+
+  if (provider.configured) {
+    return `Ready. ${provider.label} handles AI replies. Pexels image search needs PEXELS_API_KEY.`;
+  }
+
+  if (hasAnyLlmProvider() && pexelsConfigured) {
+    return `${provider.label} is missing a key, so AI replies will fall back to another configured provider. Pexels image search is ready.`;
   }
 
   if (pexelsConfigured) {
-    return "Ready for basic chat and Pexels. Try hi, 24 * 7, 10 km to miles, or photos of mountains.";
+    return `Ready for basic chat and Pexels. Add ${provider.label.toUpperCase()}_API_KEY for fuller AI replies.`;
   }
 
-  if (openaiConfigured) {
-    return "Ready for general chat. Pexels image search needs PEXELS_API_KEY.";
-  }
-
-  return "Ready for basic chat. Add OPENAI_API_KEY for fuller replies or PEXELS_API_KEY for images.";
+  return "Ready for basic chat. Add OPENAI_API_KEY, GEMINI_API_KEY, or PEXELS_API_KEY for more features.";
 }
 
 function readyStatusText() {
-  if (openaiConfigured && pexelsConfigured) {
-    return "Chat + Pexels ready";
+  const provider = getProviderInfo();
+
+  if (provider.configured && pexelsConfigured) {
+    return `${provider.label} + Pexels ready`;
+  }
+
+  if (provider.configured) {
+    return `${provider.label} ready`;
+  }
+
+  if (hasAnyLlmProvider() && pexelsConfigured) {
+    return `${provider.label} missing, fallback ready`;
+  }
+
+  if (hasAnyLlmProvider()) {
+    return `${provider.label} missing, fallback ready`;
   }
 
   if (pexelsConfigured) {
     return "Basic chat + Pexels";
-  }
-
-  if (openaiConfigured) {
-    return "Chat ready";
   }
 
   return "Basic chat ready";
@@ -125,10 +211,31 @@ async function loadStatus() {
     configured = Boolean(status.configured);
     pexelsConfigured = Boolean(status.pexelsConfigured);
     openaiConfigured = Boolean(status.openaiConfigured);
-    modelName.textContent = status.model || "Model";
+    geminiConfigured = Boolean(status.geminiConfigured);
+    llmProviders = status.llmProviders || [
+      {
+        id: "openai",
+        label: "OpenAI",
+        configured: openaiConfigured,
+        model: status.model || "",
+      },
+      {
+        id: "gemini",
+        label: "Gemini",
+        configured: geminiConfigured,
+        model: "",
+      },
+    ];
+
+    if (!llmProviders.some((provider) => provider.id === selectedProvider)) {
+      selectedProvider = status.defaultProvider || "openai";
+      saveStoredProvider(selectedProvider);
+    }
+
+    setProviderOptions(llmProviders);
+    updateProviderUi();
 
     if (configured) {
-      setStatus("ready", readyStatusText());
       input.disabled = false;
       sendButton.disabled = false;
       appendMessage("assistant", readyMessage());
@@ -153,7 +260,7 @@ async function sendMessage(message) {
     const response = await fetch("/api/chat", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message, history }),
+      body: JSON.stringify({ message, history, provider: selectedProvider }),
     });
 
     const payload = await response.json();
@@ -192,6 +299,14 @@ input.addEventListener("keydown", (event) => {
     event.preventDefault();
     composer.requestSubmit();
   }
+});
+
+providerSelect.addEventListener("change", () => {
+  selectedProvider = providerSelect.value;
+  saveStoredProvider(selectedProvider);
+  updateProviderUi();
+  appendMessage("system", `AI responses will use ${getProviderInfo().label}.`);
+  input.focus();
 });
 
 clearButton.addEventListener("click", () => {
